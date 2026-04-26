@@ -11,7 +11,7 @@ local lp = Players.LocalPlayer
 --  CONFIG & STATE
 -- ══════════════════════════════════════════
 local cfg = {
-    spinSpeed    = 9999,   
+    flingPower   = 999999, 
     flingTime    = 0.3,    
     continuous   = false,  
     autoFarm     = false,  
@@ -106,7 +106,7 @@ local function flingPlayer(targetPlr)
     -- Use massive BodyAngularVelocity to spin us
     local bav = Instance.new("BodyAngularVelocity")
     bav.Name = "FlingBAV"
-    bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
+    bav.AngularVelocity = Vector3.new(cfg.flingPower, cfg.flingPower, cfg.flingPower)
     bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
     bav.P = math.huge
     bav.Parent = myHRP
@@ -129,7 +129,7 @@ local function flingPlayer(targetPlr)
         end
 
         -- Re-apply insane velocities every frame
-        myHRP.AssemblyAngularVelocity = Vector3.new(999999, 999999, 999999)
+        myHRP.AssemblyAngularVelocity = Vector3.new(cfg.flingPower, cfg.flingPower, cfg.flingPower)
         myHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
         -- Teleport exactly on top of them, predicting their movement slightly
@@ -187,6 +187,30 @@ end
 updatePlayers()
 Players.PlayerAdded:Connect(updatePlayers)
 Players.PlayerRemoving:Connect(updatePlayers)
+
+MainTab:CreateSlider({
+   Name = "Fling Power",
+   Range = {1000, 1000000},
+   Increment = 1000,
+   Suffix = " Power",
+   CurrentValue = cfg.flingPower,
+   Flag = "FlingPower", 
+   Callback = function(Value)
+       cfg.flingPower = Value
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "Fling Duration",
+   Range = {0.1, 5},
+   Increment = 0.1,
+   Suffix = "s",
+   CurrentValue = cfg.flingTime,
+   Flag = "FlingDuration", 
+   Callback = function(Value)
+       cfg.flingTime = Value
+   end,
+})
 
 MainTab:CreateToggle({
    Name = "Auto-Nearest Player",
