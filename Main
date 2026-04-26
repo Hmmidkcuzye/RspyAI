@@ -66,10 +66,19 @@ local function stopFling()
     local myChar = getChar(lp)
     local myHum  = getHum(myChar)
     local myHRP  = getHRP(myChar)
+    
+    if myHRP then
+        local bav = myHRP:FindFirstChild("FlingBAV")
+        if bav then bav:Destroy() end
+        myHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        myHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    end
+    
     if myHum then
         myHum.PlatformStand = false
         myHum.AutoRotate    = true
     end
+    
     if myHRP and origCFrame then
         myHRP.CFrame = origCFrame
         origCFrame   = nil
@@ -94,37 +103,44 @@ local function flingPlayer(targetPlr)
     myHum.PlatformStand = true
     myHum.AutoRotate    = false
 
-    myHRP.CFrame = tgtHRP.CFrame * CFrame.new(0, 3, 0)
+    -- Use massive BodyAngularVelocity to spin us
+    local bav = Instance.new("BodyAngularVelocity")
+    bav.Name = "FlingBAV"
+    bav.AngularVelocity = Vector3.new(999999, 999999, 999999)
+    bav.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bav.P = math.huge
+    bav.Parent = myHRP
 
-    local weld       = Instance.new("Motor6D")
-    weld.Part0       = myHRP
-    weld.Part1       = tgtHRP
-    weld.C0          = CFrame.new(0, -1.5, 0)
-    weld.Parent      = myHRP
+    -- Noclip our character so we can glitch inside them
+    for _, part in ipairs(myChar:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
 
     local elapsed = 0
-    local lastTime = tick()
 
-    flingConn = RunService.Heartbeat:Connect(function()
-        local dt = tick() - lastTime
-        lastTime = tick()
-        elapsed  = elapsed + dt
+    flingConn = RunService.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
 
         if not (myHRP and myHRP.Parent and tgtHRP and tgtHRP.Parent) then
-            weld:Destroy()
             stopFling()
             return
         end
 
-        myHRP.CFrame = myHRP.CFrame * CFrame.Angles(0, math.rad(cfg.spinSpeed * dt), 0)
+        -- Re-apply insane velocities every frame
+        myHRP.AssemblyAngularVelocity = Vector3.new(999999, 999999, 999999)
+        myHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+        -- Teleport exactly on top of them, predicting their movement slightly
+        local pred = tgtHRP.AssemblyLinearVelocity * dt * 1.2
+        myHRP.CFrame = tgtHRP.CFrame + pred
 
         if elapsed >= cfg.flingTime then
-            weld:Destroy()
-            tgtHRP.AssemblyLinearVelocity = myHRP.CFrame.LookVector * 500 + Vector3.new(0, 300, 0)
             stopFling()
 
             if cfg.continuous then
-                task.wait(1.5)
+                task.wait(1)
                 flingPlayer(targetPlr)
             end
         end
