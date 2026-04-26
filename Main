@@ -1,0 +1,377 @@
+-- RemoteSpy | Jack
+-- Hooks __namecall, supports PC + Mobile
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local LP = Players.LocalPlayer
+
+-- Cleanup old instance
+pcall(function()
+    if CoreGui:FindFirstChild("RS_Jack") then CoreGui.RS_Jack:Destroy() end
+end)
+
+local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
+
+-- ── Helpers ──────────────────────────────────────────────────────────────────
+
+local function setclip(text)
+    pcall(function()
+        if setclipboard then setclipboard(text)
+        elseif syn and syn.clipboard then syn.clipboard.set(text) end
+    end)
+end
+
+local function getPath(obj)
+    if typeof(obj) ~= "Instance" then return tostring(obj) end
+    local p, cur = {}, obj
+    while cur and cur ~= game do table.insert(p, 1, cur.Name); cur = cur.Parent end
+    local r = "game"
+    for _, n in ipairs(p) do r = r .. ':FindFirstChild("' .. n .. '")' end
+    return r
+end
+
+local function serialize(v, d)
+    d = d or 0
+    if d > 3 then return '"..."' end
+    local t = typeof(v)
+    if t == "string"  then return ('%q'):format(v)
+    elseif t == "number" or t == "boolean" then return tostring(v)
+    elseif t == "nil" then return "nil"
+    elseif t == "Instance" then return getPath(v)
+    elseif t == "Vector3" then return ("Vector3.new(%g,%g,%g)"):format(v.X,v.Y,v.Z)
+    elseif t == "Vector2" then return ("Vector2.new(%g,%g)"):format(v.X,v.Y)
+    elseif t == "CFrame" then return ("CFrame.new(%g,%g,%g)"):format(v.X,v.Y,v.Z)
+    elseif t == "Color3" then return ("Color3.fromRGB(%d,%d,%d)"):format(v.R*255,v.G*255,v.B*255)
+    elseif t == "EnumItem" then return tostring(v)
+    elseif t == "UDim2" then return ("UDim2.new(%g,%d,%g,%d)"):format(v.X.Scale,v.X.Offset,v.Y.Scale,v.Y.Offset)
+    elseif t == "table" then
+        local items = {}
+        for k, val in pairs(v) do
+            if type(k) == "number" then items[#items+1] = serialize(val, d+1)
+            else items[#items+1] = '["'..tostring(k)..'"]='..(serialize(val, d+1)) end
+        end
+        return "{"..table.concat(items,",").."}"
+    else return "--[["..t.."]]" end
+end
+
+local function buildCode(remote, method, args)
+    local parts = {}
+    for _, v in ipairs(args) do parts[#parts+1] = serialize(v) end
+    return getPath(remote) .. ":" .. method .. "(" .. table.concat(parts, ", ") .. ")"
+end
+
+-- ── Colors ───────────────────────────────────────────────────────────────────
+
+local C = {
+    bg      = Color3.fromRGB(13,13,18),
+    header  = Color3.fromRGB(18,18,28),
+    accent  = Color3.fromRGB(110,60,230),
+    entry   = Color3.fromRGB(20,20,30),
+    text    = Color3.fromRGB(225,225,240),
+    sub     = Color3.fromRGB(130,130,155),
+    fire    = Color3.fromRGB(255,175,50),
+    invoke  = Color3.fromRGB(60,190,255),
+    blue    = Color3.fromRGB(40,120,210),
+    green   = Color3.fromRGB(50,180,90),
+    red     = Color3.fromRGB(200,55,55),
+    orange  = Color3.fromRGB(210,110,30),
+    dark    = Color3.fromRGB(40,40,60),
+}
+
+-- ── GUI ──────────────────────────────────────────────────────────────────────
+
+local function corner(r, p) local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,r); c.Parent = p end
+local function stroke(col, th, p) local s = Instance.new("UIStroke"); s.Color=col; s.Thickness=th; s.Parent=p end
+
+local W = isMobile and 370 or 440
+local H = isMobile and 320 or 380
+local BSIZE = isMobile and 28 or 24
+local BTEXTSIZE = isMobile and 12 or 10
+
+local sg = Instance.new("ScreenGui")
+sg.Name = "RS_Jack"
+sg.ResetOnSpawn = false
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.DisplayOrder = 9999
+pcall(function() sg.Parent = CoreGui end)
+if not sg.Parent then sg.Parent = LP.PlayerGui end
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0,W,0,H)
+main.Position = UDim2.new(0.5,-W/2,0.5,-H/2)
+main.BackgroundColor3 = C.bg
+main.BorderSizePixel = 0
+main.ClipsDescendants = true
+main.Parent = sg
+corner(10, main)
+stroke(C.accent, 1.5, main)
+
+-- Header
+local hdr = Instance.new("Frame")
+hdr.Size = UDim2.new(1,0,0,42)
+hdr.BackgroundColor3 = C.header
+hdr.BorderSizePixel = 0
+hdr.Parent = main
+corner(10, hdr)
+
+-- Fix bottom corners of header
+local hfix = Instance.new("Frame")
+hfix.Size = UDim2.new(1,0,0.5,0)
+hfix.Position = UDim2.new(0,0,0.5,0)
+hfix.BackgroundColor3 = C.header
+hfix.BorderSizePixel = 0
+hfix.Parent = hdr
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Text = "  🔍 RemoteSpy"
+titleLbl.Font = Enum.Font.GothamBold
+titleLbl.TextSize = 14
+titleLbl.TextColor3 = C.text
+titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+titleLbl.BackgroundTransparency = 1
+titleLbl.Size = UDim2.new(1,-130,1,0)
+titleLbl.Parent = hdr
+
+local countLbl = Instance.new("TextLabel")
+countLbl.Text = "0"
+countLbl.Font = Enum.Font.Gotham
+countLbl.TextSize = 11
+countLbl.TextColor3 = C.sub
+countLbl.BackgroundTransparency = 1
+countLbl.Size = UDim2.new(0,40,1,0)
+countLbl.Position = UDim2.new(0,150,0,0)
+countLbl.Parent = hdr
+
+local function hBtn(txt, col, xOff)
+    local b = Instance.new("TextButton")
+    b.Text = txt; b.Font = Enum.Font.GothamBold; b.TextSize = 12
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.BackgroundColor3 = col; b.BorderSizePixel = 0
+    b.Size = UDim2.new(0,30,0,26)
+    b.Position = UDim2.new(1,xOff,0.5,-13)
+    corner(6, b); b.Parent = hdr
+    return b
+end
+
+local closeBtn = hBtn("✕", C.red, -8)
+local minBtn   = hBtn("—", C.dark, -44)
+local clearBtn = hBtn("🗑", Color3.fromRGB(160,50,50), -80)
+local pauseBtn = hBtn("⏸", C.dark, -116)
+
+-- Scroll log
+local scroll = Instance.new("ScrollingFrame")
+scroll.Size = UDim2.new(1,0,1,-42)
+scroll.Position = UDim2.new(0,0,0,42)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 4
+scroll.ScrollBarImageColor3 = C.accent
+scroll.BorderSizePixel = 0
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scroll.CanvasSize = UDim2.new(0,0,0,0)
+scroll.Parent = main
+
+local ull = Instance.new("UIListLayout")
+ull.SortOrder = Enum.SortOrder.LayoutOrder
+ull.Padding = UDim.new(0,2)
+ull.Parent = scroll
+
+local upad = Instance.new("UIPadding")
+upad.PaddingLeft = UDim.new(0,5)
+upad.PaddingRight = UDim.new(0,5)
+upad.PaddingTop = UDim.new(0,4)
+upad.PaddingBottom = UDim.new(0,4)
+upad.Parent = scroll
+
+-- ── Dragging ─────────────────────────────────────────────────────────────────
+
+local dragging, dragStart, dragPos = false, nil, nil
+
+hdr.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = inp.Position
+        dragPos = main.Position
+        inp.Changed:Connect(function()
+            if inp.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+
+UIS.InputChanged:Connect(function(inp)
+    if not dragging then return end
+    if inp.UserInputType == Enum.UserInputType.MouseMovement
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        local d = inp.Position - dragStart
+        main.Position = UDim2.new(dragPos.X.Scale, dragPos.X.Offset+d.X, dragPos.Y.Scale, dragPos.Y.Offset+d.Y)
+    end
+end)
+
+-- ── Controls ─────────────────────────────────────────────────────────────────
+
+local minimized = false
+closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    TweenService:Create(main, TweenInfo.new(0.18), {
+        Size = minimized and UDim2.new(0,W,0,42) or UDim2.new(0,W,0,H)
+    }):Play()
+    minBtn.Text = minimized and "□" or "—"
+end)
+
+clearBtn.MouseButton1Click:Connect(function()
+    for _, c in ipairs(scroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    countLbl.Text = "0"
+end)
+
+local paused = false
+pauseBtn.MouseButton1Click:Connect(function()
+    paused = not paused
+    pauseBtn.Text = paused and "▶" or "⏸"
+    pauseBtn.BackgroundColor3 = paused and C.orange or C.dark
+end)
+
+-- Blocked remotes set
+local blocked = {}
+
+-- ── Entry Builder ─────────────────────────────────────────────────────────────
+
+local logN = 0
+
+local function addEntry(remote, method, args)
+    if paused then return end
+    logN += 1
+    countLbl.Text = tostring(logN)
+
+    -- Cap at 150
+    local children = scroll:GetChildren()
+    local n = 0
+    for _, c in ipairs(children) do if c:IsA("Frame") then n+=1 end end
+    if n >= 150 then
+        for _, c in ipairs(children) do
+            if c:IsA("Frame") then c:Destroy(); break end
+        end
+    end
+
+    local mColor = (method == "InvokeServer" or method == "InvokeClient") and C.invoke or C.fire
+    local argParts = {}
+    for _, v in ipairs(args) do argParts[#argParts+1] = serialize(v) end
+    local preview = table.concat(argParts, ", ")
+    if #preview > 55 then preview = preview:sub(1,55).."…" end
+
+    local entry = Instance.new("Frame")
+    entry.Name = "Entry"
+    entry.BackgroundColor3 = C.entry
+    entry.BorderSizePixel = 0
+    entry.Size = UDim2.new(1,0,0,BSIZE*2+14)
+    entry.LayoutOrder = logN
+    entry.Parent = scroll
+    corner(6, entry)
+
+    -- Left color bar
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0,3,1,0)
+    bar.BackgroundColor3 = mColor
+    bar.BorderSizePixel = 0
+    bar.Parent = entry
+    corner(3, bar)
+
+    local function lbl(txt, font, size, color, sx,sy,px,py, trunc)
+        local l = Instance.new("TextLabel")
+        l.Text = txt; l.Font = font; l.TextSize = size
+        l.TextColor3 = color; l.BackgroundTransparency = 1
+        l.TextXAlignment = Enum.TextXAlignment.Left
+        l.Size = UDim2.new(sx,sy,0,size+2)
+        l.Position = UDim2.new(0,px,0,py)
+        if trunc then l.TextTruncate = Enum.TextTruncate.AtEnd end
+        l.Parent = entry
+        return l
+    end
+
+    lbl(remote and remote.Name or "?", Enum.Font.GothamBold, 13, C.text,   1,-125, 10, 4,  true)
+    lbl(":"..method,                    Enum.Font.Gotham,     11, mColor,   1,-125, 10, 19, true)
+    lbl(preview=="" and "(no args)" or preview, Enum.Font.Code, isMobile and 10 or 9, C.sub, 1,-125, 10, 34, true)
+
+    -- Entry buttons
+    local function eBtn(txt, col, xOff)
+        local b = Instance.new("TextButton")
+        b.Text = txt; b.Font = Enum.Font.GothamBold
+        b.TextSize = BTEXTSIZE
+        b.TextColor3 = Color3.fromRGB(255,255,255)
+        b.BackgroundColor3 = col; b.BorderSizePixel = 0
+        b.Size = UDim2.new(0,isMobile and 56 or 52,0,BSIZE)
+        b.Position = UDim2.new(1,xOff,0.5,-(BSIZE/2))
+        corner(5,b); b.Parent = entry
+        return b
+    end
+
+    local btnOff = isMobile and -60 or -56
+
+    local copyRemote = eBtn("Remote", C.blue,   btnOff*2 - 4)
+    local copyCode   = eBtn("Code",   C.green,  btnOff - 2)
+    local blockBtn   = eBtn("Block",  C.red,    -2)
+
+    -- flash helper
+    local function flash(btn, orig, origCol)
+        btn.Text = "✓"; btn.BackgroundColor3 = C.green
+        task.delay(1.5, function() btn.Text = orig; btn.BackgroundColor3 = origCol end)
+    end
+
+    copyRemote.MouseButton1Click:Connect(function()
+        setclip(getPath(remote))
+        flash(copyRemote, "Remote", C.blue)
+    end)
+
+    copyCode.MouseButton1Click:Connect(function()
+        setclip(buildCode(remote, method, args))
+        flash(copyCode, "Code", C.green)
+    end)
+
+    blockBtn.MouseButton1Click:Connect(function()
+        blocked[remote] = not blocked[remote]
+        if blocked[remote] then
+            blockBtn.Text = "✓ Blk"
+            blockBtn.BackgroundColor3 = C.orange
+            entry.BackgroundColor3 = Color3.fromRGB(35,15,15)
+        else
+            blockBtn.Text = "Block"
+            blockBtn.BackgroundColor3 = C.red
+            entry.BackgroundColor3 = C.entry
+        end
+    end)
+
+    -- Auto scroll
+    task.defer(function()
+        scroll.CanvasPosition = Vector2.new(0, math.huge)
+    end)
+end
+
+-- ── Hook __namecall ───────────────────────────────────────────────────────────
+
+local WATCH = {FireServer=true, InvokeServer=true, FireAllClients=true, FireClient=true, InvokeClient=true}
+local oldNC
+
+oldNC = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if WATCH[method] then
+        local ok, isRE = pcall(function() return self:IsA("RemoteEvent") end)
+        local ok2, isRF = pcall(function() return self:IsA("RemoteFunction") end)
+        local ok3, isURE = pcall(function() return self:IsA("UnreliableRemoteEvent") end)
+
+        if (ok and isRE) or (ok2 and isRF) or (ok3 and isURE) then
+            if blocked[self] then return end -- blocked
+            local args = {...}
+            task.defer(function()
+                pcall(addEntry, self, method, args)
+            end)
+        end
+    end
+    return oldNC(self, ...)
+end))
+
+print("[RemoteSpy] Loaded — hooked __namecall")
