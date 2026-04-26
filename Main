@@ -11,7 +11,7 @@ local lp = Players.LocalPlayer
 --  CONFIG & STATE
 -- ══════════════════════════════════════════
 local cfg = {
-    flingPower   = 999999, 
+    flingPower   = 1000000, 
     flingTime    = 0.3,    
     continuous   = false,  
     autoFarm     = false,  
@@ -193,7 +193,7 @@ MainTab:CreateSlider({
    Range = {1000, 1000000},
    Increment = 1000,
    Suffix = " Power",
-   CurrentValue = cfg.flingPower,
+   CurrentValue = 1000000,
    Flag = "FlingPower", 
    Callback = function(Value)
        cfg.flingPower = Value
@@ -201,14 +201,14 @@ MainTab:CreateSlider({
 })
 
 MainTab:CreateSlider({
-   Name = "Fling Duration",
-   Range = {0.1, 5},
-   Increment = 0.1,
-   Suffix = "s",
-   CurrentValue = cfg.flingTime,
+   Name = "Fling Duration (0.1s scale)",
+   Range = {1, 50},
+   Increment = 1,
+   Suffix = " ds",
+   CurrentValue = 3,
    Flag = "FlingDuration", 
    Callback = function(Value)
-       cfg.flingTime = Value
+       cfg.flingTime = Value / 10
    end,
 })
 
