@@ -356,22 +356,24 @@ end
 local WATCH = {FireServer=true, InvokeServer=true, FireAllClients=true, FireClient=true, InvokeClient=true}
 local oldNC
 
-oldNC = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+oldNC = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     if WATCH[method] then
-        local ok, isRE = pcall(function() return self:IsA("RemoteEvent") end)
-        local ok2, isRF = pcall(function() return self:IsA("RemoteFunction") end)
-        local ok3, isURE = pcall(function() return self:IsA("UnreliableRemoteEvent") end)
+        -- single pcall: check if it's any remote type
+        local ok, isRemote = pcall(function()
+            return self:IsA("RemoteEvent") or self:IsA("RemoteFunction") or self:IsA("UnreliableRemoteEvent")
+        end)
 
-        if (ok and isRE) or (ok2 and isRF) or (ok3 and isURE) then
-            if blocked[self] then return end -- blocked
-            local args = {...}
-            task.defer(function()
-                pcall(addEntry, self, method, args)
-            end)
+        if ok and isRemote then
+            if not blocked[self] then
+                local args = {...}
+                task.defer(function()
+                    pcall(addEntry, self, method, args)
+                end)
+            end
         end
     end
     return oldNC(self, ...)
-end))
+end)
 
 print("[RemoteSpy] Loaded — hooked __namecall")
